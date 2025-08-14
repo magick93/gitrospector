@@ -97,3 +97,6 @@ async def analyze_github_repo(request: Request):
 @app.get("/")
 async def root():
     return {"message": "GitHub Repository Analysis API"}
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

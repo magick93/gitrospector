@@ -1,0 +1,4 @@
+fastapi
+blarify
+gitpython
+uvicorn
