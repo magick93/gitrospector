@@ -8,6 +8,7 @@ from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 from fastapi.openapi.utils import get_openapi
 from git import Repo
 from blarify.prebuilt.graph_builder import GraphBuilder
+from blarify.db_managers.neo4j_manager import Neo4jManager
 
 
 app = FastAPI()
@@ -87,21 +88,43 @@ async def analyze_github_repo(request: Request):
             
             # Analyze the repository using blarify
             try:
-                graph_builder = GraphBuilder(temp_dir)
                 graph = graph_builder.build()
+
+                # Analyze a Python project
+                builder = GraphBuilder(
+                    root_path="/path/to/your/project",
+                    extensions_to_skip=[".json", ".md", ".txt"],
+                    names_to_skip=["__pycache__", ".venv", ".git"]
+)
+                
+                # Get nodes and relationships as objects
+                nodes = graph.get_nodes_as_objects()
+                relationships = graph.get_relationships_as_objects()
+                
+                # Save graph to Neo4j
+                neo4j_manager = Neo4jManager(
+                    repo_id="gitrospector",
+                    entity_id="yestech",
+                    uri=os.getenv("NEO4J_URI"),
+                    username=os.getenv("NEO4J_USERNAME"),
+                    password=os.getenv("NEO4J_PASSWORD"),
+                    database=os.getenv("NEO4J_DATABASE")
+                )
+                neo4j_manager.save_graph(nodes, relationships)
+                neo4j_manager.close()
                 
                 # Extract nodes and relationships
-                nodes = []
-                relationships = []
+                nodes_list = []
+                relationships_list = []
                 
                 # Convert graph data to the required format
                 # This assumes the graph object has nodes and relationships attributes
                 # Adjust according to blarify's actual API
                 if hasattr(graph, 'nodes'):
-                    nodes = [{"id": node.id, "properties": node.properties} for node in graph.nodes]
+                    nodes_list = [{"id": node.id, "properties": node.properties} for node in graph.nodes]
                 
                 if hasattr(graph, 'relationships'):
-                    relationships = [
+                    relationships_list = [
                         {
                             "id": rel.id,
                             "source": rel.source_node.id,
@@ -109,14 +132,15 @@ async def analyze_github_repo(request: Request):
                             "type": rel.type
                         } for rel in graph.relationships
                     ]
+                    
                 
                 return JSONResponse(
                     status_code=200,
                     content={
                         "status": "success",
                         "data": {
-                            "nodes": nodes,
-                            "relationships": relationships
+                            "nodes": nodes_list,
+                            "relationships": relationships_list
                         }
                     }
                 )
