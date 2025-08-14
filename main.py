@@ -7,7 +7,8 @@ from fastapi.responses import JSONResponse
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 from fastapi.openapi.utils import get_openapi
 from git import Repo
-from blarify import GraphBuilder
+from blarify.prebuilt.graph_builder import GraphBuilder
+
 
 app = FastAPI()
 
