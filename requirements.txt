@@ -1,4 +1,4 @@
 fastapi
-blarify
+blarify==1.0.6
 gitpython
 uvicorn
