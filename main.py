@@ -5,7 +5,8 @@ import re
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from git import Repo
-from blarify import GraphBuilder
+from blarify.prebuilt.graph_builder import GraphBuilder
+
 
 app = FastAPI()
 
