@@ -2,13 +2,20 @@ import os
 import tempfile
 import shutil
 import re
+import logging
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 from fastapi.openapi.utils import get_openapi
 from git import Repo
 from blarify.prebuilt.graph_builder import GraphBuilder
-from blarify.db_managers.neo4j_manager import Neo4jManager
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 
 app = FastAPI()
@@ -82,49 +89,39 @@ async def analyze_github_repo(request: Request):
         try:
             # Clone the repository
             try:
+                logger.info(f"Attempting to clone repository from {github_url} to {temp_dir}")
                 repo = Repo.clone_from(github_url, temp_dir)
+                logger.info(f"Successfully cloned repository from {github_url}")
             except Exception as e:
+                logger.error(f"Failed to clone repository from {github_url}: {str(e)}")
                 raise HTTPException(status_code=400, detail=f"Failed to clone repository: {str(e)}")
             
             # Analyze the repository using blarify
             try:
+                logger.info(f"Initializing GraphBuilder with directory: {temp_dir}")
+                graph_builder = GraphBuilder(temp_dir)
+                logger.info(f"GraphBuilder initialized with config: {graph_builder.config if hasattr(graph_builder, 'config') else 'No config found'}")
+                
+                logger.info("Building graph from repository...")
                 graph = graph_builder.build()
-
-                # Analyze a Python project
-                builder = GraphBuilder(
-                    root_path="/path/to/your/project",
-                    extensions_to_skip=[".json", ".md", ".txt"],
-                    names_to_skip=["__pycache__", ".venv", ".git"]
-)
-                
-                # Get nodes and relationships as objects
-                nodes = graph.get_nodes_as_objects()
-                relationships = graph.get_relationships_as_objects()
-                
-                # Save graph to Neo4j
-                neo4j_manager = Neo4jManager(
-                    repo_id="gitrospector",
-                    entity_id="yestech",
-                    uri=os.getenv("NEO4J_URI"),
-                    username=os.getenv("NEO4J_USERNAME"),
-                    password=os.getenv("NEO4J_PASSWORD"),
-                    database=os.getenv("NEO4J_DATABASE")
-                )
-                neo4j_manager.save_graph(nodes, relationships)
-                neo4j_manager.close()
+                logger.info(f"Graph building completed. Graph object type: {type(graph)}")
+                logger.debug(f"Graph object attributes: {dir(graph)}")
                 
                 # Extract nodes and relationships
                 nodes_list = []
                 relationships_list = []
                 
                 # Convert graph data to the required format
-                # This assumes the graph object has nodes and relationships attributes
-                # Adjust according to blarify's actual API
                 if hasattr(graph, 'nodes'):
-                    nodes_list = [{"id": node.id, "properties": node.properties} for node in graph.nodes]
+                    logger.info(f"Graph has {len(graph.nodes)} raw nodes")
+                    nodes = [{"id": node.id, "properties": node.properties} for node in graph.nodes]
+                    logger.info(f"Extracted {len(nodes)} nodes from graph")
+                    if nodes:
+                        logger.debug(f"First node sample: {nodes[0]}")
                 
                 if hasattr(graph, 'relationships'):
-                    relationships_list = [
+                    logger.info(f"Graph has {len(graph.relationships)} raw relationships")
+                    relationships = [
                         {
                             "id": rel.id,
                             "source": rel.source_node.id,
@@ -133,6 +130,12 @@ async def analyze_github_repo(request: Request):
                         } for rel in graph.relationships
                     ]
                     
+                    logger.info(f"Extracted {len(relationships)} relationships from graph")
+                    if relationships:
+                        logger.debug(f"First relationship sample: {relationships[0]}")
+                
+                if not nodes and not relationships:
+                    logger.warning("No nodes or relationships found in graph")
                 
                 return JSONResponse(
                     status_code=200,
@@ -145,6 +148,7 @@ async def analyze_github_repo(request: Request):
                     }
                 )
             except Exception as e:
+                logger.error(f"Blarify analysis failed: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Blarify analysis failed: {str(e)}")
         
         finally:
@@ -153,7 +157,7 @@ async def analyze_github_repo(request: Request):
                 shutil.rmtree(temp_dir)
             except Exception as e:
                 # Log the error but don't fail the request
-                print(f"Warning: Failed to clean up temporary directory: {str(e)}")
+                logger.warning(f"Failed to clean up temporary directory {temp_dir}: {str(e)}")
     
     except HTTPException as he:
         return JSONResponse(
@@ -164,6 +168,7 @@ async def analyze_github_repo(request: Request):
         return JSONResponse(
             status_code=500,
             content={"status": "error", "message": str(e)}
+            logger.error(f"Unexpected error processing request: {str(e)}")
         )
 
 @app.get("/")
