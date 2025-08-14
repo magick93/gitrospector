@@ -1,0 +1,13 @@
+name = "github-repo-analyzer"
+main = "main.py"
+compatibility_date = "2023-12-01"
+compatibility_flags = ["python_workers"]
+
+[build]
+command = ""
+
+[env.production]
+name = "github-repo-analyzer"
+
+[env.staging]
+name = "github-repo-analyzer-staging"
